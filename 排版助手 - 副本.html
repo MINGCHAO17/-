@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>公众号排版助手 - 记忆配置版</title>
+    <style>
+        /* 基础变量与 Win11 风格配置 */
+        :root {
+            --primary: #07c160;
+            --primary-hover: #06ad56;
+            --primary-shadow: rgba(7, 193, 96, 0.15);
+            --border-default: #dcdfe6;
+            --border-hover: #c0c4cc;
+            --text-main: #202020;
+            --text-muted: #606060;
+            --bg-body: #f4f5f7;
+            --bg-editor: #FFF;
+            --radius-input: 8px; 
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Microsoft YaHei";
+            background-color: var(--bg-body);
+            margin: 0; padding: 0; 
+            padding-top: 120px; 
+            overflow: hidden; 
+        }
+
+        /* 置顶工具栏 */
+        .toolbar {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-default);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            display: flex; flex-direction: column; 
+            padding: 10px 20px; z-index: 1000;
+            gap: 10px; min-width: 1150px; 
+        }
+
+        .toolbar-row {
+            display: flex; align-items: center; gap: 15px; width: 100%;
+        }
+
+        .tool-group { 
+            display: flex; align-items: center; gap: 8px; 
+            border-right: 1px solid var(--border-default); padding-right: 15px; 
+        }
+        .tool-group:last-child { border-right: none; padding-right: 0; }
+        
+        .tool-label { font-size: 13px; font-weight: bold; color: var(--text-muted); white-space: nowrap; }
+        .tool-desc { font-size: 12px; color: #666; margin-left: 2px; white-space: nowrap; }
+
+        /* 表单控件精简 Win11 风格化 */
+        input[type="number"], input[type="text"], textarea {
+            padding: 0 8px; font-size: 13px; font-family: inherit;
+            border: 1px solid var(--border-default); border-radius: 4px; outline: none;
+            background: #fff; transition: 0.2s; box-sizing: border-box;
+        }
+        input[type="number"], input[type="text"] { height: 28px; }
+        input[type="number"]:hover, input[type="text"]:hover { border-color: var(--border-hover); }
+        input[type="number"]:focus, input[type="text"]:focus { border-color: var(--primary); }
+        
+        input[type="number"] { width: 65px; text-align: center; }
+
+        /* ===== 重构版：最高兼容性的自定义下拉菜单特效 ===== */
+        .win-select-wrapper {
+            position: relative;
+            display: inline-block;
+            user-select: none;
+        }
+        .win-select-trigger {
+            position: relative;
+            padding: 0 24px 0 10px; /* 右侧留出24px给箭头 */
+            font-size: 13px; font-family: inherit; color: var(--text-main);
+            border: 1px solid var(--border-default); border-radius: 4px; outline: none;
+            background: #fff; box-sizing: border-box; height: 28px; line-height: 26px;
+            cursor: pointer; transition: all 0.2s;
+            text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .win-select-trigger:hover { border-color: var(--border-hover); }
+        .win-select-wrapper.open .win-select-trigger { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-shadow); }
+        
+        /* 绝对定位的动态箭头，完全不受文本宽度影响 */
+        .win-select-trigger::after {
+            content: ''; position: absolute; right: 10px; top: 50%; margin-top: -2.5px;
+            border-left: 4px solid transparent; border-right: 4px solid transparent;
+            border-top: 5px solid #666; transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        .win-select-wrapper.open .win-select-trigger::after { transform: rotate(-180deg); }
+        
+        /* 下拉面板 - 丝滑贝塞尔曲线弹出动画 */
+        .win-select-options {
+            position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+            background: #fff; border: 1px solid var(--border-default);
+            border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            z-index: 1000; overflow: hidden;
+            opacity: 0; visibility: hidden;
+            transform: translateY(-8px) scale(0.98);
+            transform-origin: top center;
+            transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.15), visibility 0.2s;
+        }
+        .win-select-wrapper.open .win-select-options {
+            opacity: 1; visibility: visible; transform: translateY(0) scale(1);
+        }
+        .win-option {
+            padding: 8px 12px; font-size: 13px; color: var(--text-main);
+            cursor: pointer; transition: background 0.15s;
+        }
+        .win-option:hover { background: #f0f2f5; }
+        .win-option.active { background: #e6f7ef; color: var(--primary); font-weight: bold; }
+        
+        /* 水印输入框悬浮放大特效 */
+        .wm-input-wrapper {
+            position: relative; width: 180px; height: 38px;
+        }
+        textarea#wmText { 
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%; padding: 4px 8px; resize: none; 
+            line-height: 1.4; overflow-y: auto; z-index: 10;
+            transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        textarea#wmText:hover { border-color: var(--border-hover); }
+        textarea#wmText:focus { 
+            border-color: var(--primary); height: 130px; width: 260px;  
+            z-index: 1000; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        }
+        
+        input[type="color"] {
+            width: 26px; height: 26px; padding: 0; border: none; background: transparent; cursor: pointer;
+        }
+        input[type="color"]::-webkit-color-swatch { border-radius: 4px; border: 1px solid var(--border-default); }
+
+        .checkbox-label { display: flex; align-items: center; gap: 4px; font-size: 13px; cursor: pointer; white-space: nowrap;}
+        .checkbox-label input { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
+
+        /* 滑动条样式 */
+        input[type="range"] {
+            -webkit-appearance: none; width: 80px; height: 4px; background: #e0e0e0; border-radius: 2px; outline: none; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 12px; height: 12px; background: var(--primary); border-radius: 50%; transition: 0.2s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.1); }
+
+        /* 预览区域 */
+        .preview-box {
+            display: flex; align-items: center; gap: 8px;
+            background: #f8f9fa; padding: 4px 8px; border-radius: 6px; border: 1px solid #ebebeb;
+        }
+        #wmPreviewCanvas {
+            width: 100px; height: 60px; background-color: #fff;
+            border: 1px dashed #ccc; border-radius: 4px;
+        }
+
+        /* 按钮动效 */
+        .btn-action-wrp { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+        .btn-copy {
+            background: var(--primary); color: #fff;
+            border: none; border-radius: 6px;
+            padding: 8px 20px; font-size: 14px; font-weight: bold;
+            cursor: pointer; transition: 0.2s;
+            box-shadow: 0 4px 12px rgba(7, 193, 96, 0.2); white-space: nowrap;
+        }
+        .btn-copy:hover { background: var(--primary-hover); }
+        .btn-copy:active { transform: scale(0.96); }
+
+        .btn-action {
+            background: #fff; color: var(--text-main);
+            border: 1px solid var(--border-default); border-radius: 4px;
+            padding: 6px 14px; font-size: 13px; font-weight: bold;
+            cursor: pointer; transition: 0.2s; white-space: nowrap;
+        }
+        .btn-action:hover { background: #f0f2f5; border-color: var(--border-hover); }
+
+        .btn-clear {
+            background: #fff; color: #dc3545;
+            border: 1px solid var(--border-default); border-radius: 4px;
+            padding: 6px 14px; font-size: 13px;
+            cursor: pointer; transition: 0.2s; white-space: nowrap;
+        }
+        .btn-clear:hover { background: #ffeef0; border-color: #ffcdd2; }
+        .btn-clear:disabled, .btn-copy:disabled, .btn-action:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* 编辑预览区域 */
+        .editor-container {
+            flex: 1; padding: 20px 30px; overflow: hidden;
+            display: flex; flex-direction: column; align-items: center;
+        }
+
+        #editor {
+            width: 100%; max-width: 800px; height: calc(100vh - 160px);
+            background-color: var(--bg-editor);
+            border: 2px solid var(--border-default); border-radius: var(--radius-input);
+            padding: 20px 25px; box-sizing: border-box; outline: none; overflow-y: auto;
+            font-size: 15px; line-height: 1.8; color: #333; transition: all 0.3s;
+        }
+        #editor:hover { border-color: var(--border-hover); }
+        #editor:focus { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-shadow); }
+
+        #editor:empty:before {
+            content: "👇 第一步：粘贴内容。\n\n👉 参数会自动应用。\n👉 在上方“水印区”调好参数看效果图，然后点击【全局打水印】。\n\n👆 第二步：点击【复制到公众号】。";
+            color: #b5b5b5; pointer-events: none; white-space: pre-wrap;
+        }
+        
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #C1C1C1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #A8A8A8; }
+    </style>
+</head>
+<body>
+
+    <div class="toolbar" id="toolbar">
+        <div class="toolbar-row">
+            <div class="tool-group">
+                <span class="tool-label">📝 文字</span>
+                <div class="win-select-wrapper" style="width: 110px;">
+                    <select id="fontSizeSelect" class="auto-trigger" style="display: none;">
+                        <option value="14px" selected>14px</option>
+                        <option value="15px">15px (推荐)</option>
+                        <option value="16px">16px</option>
+                        <option value="17px">17px</option>
+                    </select>
+                    <div class="win-select-trigger">14px</div>
+                    <div class="win-select-options">
+                        <div class="win-option active" data-value="14px">14px</div>
+                        <div class="win-option" data-value="15px">15px (推荐)</div>
+                        <div class="win-option" data-value="16px">16px</div>
+                        <div class="win-option" data-value="17px">17px</div>
+                    </div>
+                </div>
+
+                <input type="color" id="fontColorSelect" class="auto-trigger" value="#000000" title="文字颜色">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="boldNumberCheck" class="auto-trigger"> 序号加粗
+                </label>
+                
+                <span class="tool-desc" style="margin-left: 6px;">格式:</span>
+                <input type="text" id="numFormat" class="auto-trigger" value="{n}、" title="自定义序号样式，{n}代表数字。如：【{n}】" style="width: 55px; text-align: center;">
+                <button class="btn-action" style="margin-left: 6px;" onclick="clearOriginalNumbers()" title="一键清除段落原有的 1. a、 (1) 等前缀序号">清理原序号</button>
+            </div>
+
+            <div class="tool-group">
+                <span class="tool-label">🖼️ 图片</span>
+                <div class="win-select-wrapper" style="width: 80px;">
+                    <select id="imgAlignSelect" class="auto-trigger" style="display: none;">
+                        <option value="center">居中</option>
+                        <option value="left" selected>靠左</option>
+                        <option value="right">靠右</option>
+                    </select>
+                    <div class="win-select-trigger">靠左</div>
+                    <div class="win-select-options">
+                        <div class="win-option" data-value="center">居中</div>
+                        <div class="win-option active" data-value="left">靠左</div>
+                        <div class="win-option" data-value="right">靠右</div>
+                    </div>
+                </div>
+
+                <span class="tool-desc">圆角:</span>
+                <input type="number" id="imgBorderRadius" class="auto-trigger" value="10" min="0" max="50">
+                <span class="tool-desc">边框:</span>
+                <input type="number" id="imgBorderWidth" class="auto-trigger" value="1" min="0" max="10">
+                <input type="color" id="imgBorderColor" class="auto-trigger" value="#000000">
+            </div>
+
+            <div class="tool-group">
+                <span class="tool-label">⚙️ 配置</span>
+                <button class="btn-action" onclick="document.getElementById('importFile').click()" title="读取已保存的.json配置文件">导入</button>
+                <button class="btn-action" onclick="exportConfig()" title="将当前参数导出为.json文件保存">导出</button>
+                <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importConfig(event)">
+            </div>
+            
+            <button class="btn-clear" onclick="clearEditor()" style="margin-left: auto;">清空画板</button>
+        </div>
+
+        <div class="toolbar-row">
+            <div class="tool-group">
+                <span class="tool-label">💧 水印</span>
+                <div class="wm-input-wrapper">
+                    <textarea id="wmText" class="wm-trigger" placeholder="支持多行&#10;回车换行">关注微信公众号：&#10;APP软件阁&#10;获取更多软件</textarea>
+                </div>
+                
+                <span class="tool-desc">角度:</span>
+                <input type="number" id="wmRotation" class="wm-trigger" value="-30" min="-180" max="180">
+                
+                <span class="tool-desc">透明:</span>
+                <input type="range" id="wmOpacity" class="wm-trigger" value="50" min="0" max="100"> 
+                <span id="wmOpacityVal" style="font-size: 11px; color: #888; width: 28px;">50%</span>
+                
+                <span class="tool-desc">占比:</span>
+                <input type="number" id="wmSizePercent" class="wm-trigger" value="20" min="1" max="100">
+                <span style="font-size: 12px; color: #666;">%</span>
+            </div>
+
+            <div class="preview-box">
+                <span class="tool-desc" style="color:var(--primary);font-weight:bold;">预览图 👉</span>
+                <canvas id="wmPreviewCanvas" width="200" height="120"></canvas>
+            </div>
+
+            <div class="btn-action-wrp">
+                <button class="btn-action" onclick="applyWatermarkToAllImages()">全局打水印</button>
+                <button class="btn-copy" id="copyBtn" onclick="doCopy()">复制到公众号</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="editor-container">
+        <div id="editor" contenteditable="true"></div>
+    </div>
+
+<script>
+    const editor = document.getElementById('editor');
+
+    // ==========================================
+    // 0. 强兼容版的自定义菜单交互逻辑
+    // ==========================================
+    function initCustomSelects() {
+        document.querySelectorAll('.win-select-wrapper').forEach(wrapper => {
+            const realSelect = wrapper.querySelector('select');
+            const trigger = wrapper.querySelector('.win-select-trigger');
+            const options = wrapper.querySelectorAll('.win-option');
+
+            // 1. 点击展开/收起
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.querySelectorAll('.win-select-wrapper').forEach(w => {
+                    if (w !== wrapper) w.classList.remove('open');
+                });
+                wrapper.classList.toggle('open');
+            });
+
+            // 2. 选择操作
+            options.forEach(opt => {
+                opt.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const value = opt.getAttribute('data-value');
+                    
+                    // 覆盖文本，CSS 的 ::after 箭头不会被覆盖
+                    trigger.innerText = opt.innerText; 
+                    options.forEach(o => o.classList.remove('active'));
+                    opt.classList.add('active');
+                    wrapper.classList.remove('open');
+                    
+                    if(realSelect) {
+                        realSelect.value = value;
+                        realSelect.dispatchEvent(new Event('change'));
+                    }
+                });
+            });
+        });
+
+        // 3. 全局点击关闭
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.win-select-wrapper').forEach(w => w.classList.remove('open'));
+        });
+    }
+
+    // 核心同步函数：保证显示文字和隐藏的 <select> 绝对一致
+    function syncCustomSelectUI() {
+        document.querySelectorAll('.win-select-wrapper').forEach(wrapper => {
+            const realSelect = wrapper.querySelector('select');
+            const trigger = wrapper.querySelector('.win-select-trigger');
+            const options = wrapper.querySelectorAll('.win-option');
+            
+            if (!realSelect || !trigger) return;
+
+            let matchText = "";
+            options.forEach(opt => {
+                if (opt.getAttribute('data-value') === realSelect.value) {
+                    matchText = opt.innerText;
+                    opt.classList.add('active');
+                } else {
+                    opt.classList.remove('active');
+                }
+            });
+
+            // 终极防错：如果从本地缓存读取到了异常数据，强制回退显示第一项
+            if (!matchText && realSelect.options.length > 0) {
+                matchText = realSelect.options[realSelect.selectedIndex].text;
+            }
+
+            if (matchText) {
+                trigger.innerText = matchText;
+            }
+        });
+    }
+
+    // ==========================================
+    // 1. 配置保存与读取
+    // ==========================================
+    function getConfigData() {
+        return {
+            fontSize: document.getElementById('fontSizeSelect').value,
+            fontColor: document.getElementById('fontColorSelect').value,
+            boldNumber: document.getElementById('boldNumberCheck').checked,
+            numFormat: document.getElementById('numFormat').value,
+            imgAlign: document.getElementById('imgAlignSelect').value,
+            imgRadius: document.getElementById('imgBorderRadius').value,
+            imgBorderWidth: document.getElementById('imgBorderWidth').value,
+            imgBorderColor: document.getElementById('imgBorderColor').value,
+            wmText: document.getElementById('wmText').value,
+            wmRotation: document.getElementById('wmRotation').value,
+            wmOpacity: document.getElementById('wmOpacity').value,
+            wmSizePercent: document.getElementById('wmSizePercent').value
+        };
+    }
+
+    function applyConfigData(config) {
+        if(!config) return;
+        if(config.fontSize) { const el = document.getElementById('fontSizeSelect'); if(el) el.value = config.fontSize; }
+        if(config.fontColor) { const el = document.getElementById('fontColorSelect'); if(el) el.value = config.fontColor; }
+        if(config.boldNumber !== undefined) { const el = document.getElementById('boldNumberCheck'); if(el) el.checked = config.boldNumber; }
+        if(config.numFormat) { const el = document.getElementById('numFormat'); if(el) el.value = config.numFormat; }
+        if(config.imgAlign) { const el = document.getElementById('imgAlignSelect'); if(el) el.value = config.imgAlign; }
+        if(config.imgRadius !== undefined) { const el = document.getElementById('imgBorderRadius'); if(el) el.value = config.imgRadius; }
+        if(config.imgBorderWidth !== undefined) { const el = document.getElementById('imgBorderWidth'); if(el) el.value = config.imgBorderWidth; }
+        if(config.imgBorderColor) { const el = document.getElementById('imgBorderColor'); if(el) el.value = config.imgBorderColor; }
+        if(config.wmText !== undefined) { const el = document.getElementById('wmText'); if(el) el.value = config.wmText; }
+        if(config.wmRotation !== undefined) { const el = document.getElementById('wmRotation'); if(el) el.value = config.wmRotation; }
+        if(config.wmOpacity !== undefined) { const el = document.getElementById('wmOpacity'); if(el) el.value = config.wmOpacity; }
+        if(config.wmSizePercent !== undefined) { const el = document.getElementById('wmSizePercent'); if(el) el.value = config.wmSizePercent; }
+
+        syncCustomSelectUI();
+        updatePreview();
+        applyFormatting();
+    }
+
+    function saveToLocal() {
+        localStorage.setItem('WeChatEditorParams', JSON.stringify(getConfigData()));
+    }
+
+    function loadFromLocal() {
+        const savedData = localStorage.getItem('WeChatEditorParams');
+        if (savedData) {
+            try {
+                applyConfigData(JSON.parse(savedData));
+            } catch (e) {
+                console.error("缓存解析失败", e);
+                syncCustomSelectUI(); 
+            }
+        } else {
+            syncCustomSelectUI();
+        }
+    }
+
+    async function exportConfig() {
+        const configStr = JSON.stringify(getConfigData(), null, 2);
+        try {
+            if (window.showSaveFilePicker) {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: '排版助手_自定义配置.json',
+                    types: [{ description: 'JSON 配置文件', accept: {'application/json': ['.json']} }],
+                });
+                const writable = await handle.createWritable();
+                await writable.write(configStr);
+                await writable.close();
+            } else {
+                const blob = new Blob([configStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "排版助手_自定义配置.json";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') { alert("❌ 保存出错，请检查浏览器权限或重试。"); }
+        }
+    }
+
+    function importConfig(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const configData = JSON.parse(e.target.result);
+                applyConfigData(configData);
+                saveToLocal();
+                alert("✅ 配置导入成功！");
+            } catch (error) {
+                alert("❌ 读取失败：这不是一个有效的配置文件格式。");
+            }
+            event.target.value = ''; 
+        };
+        reader.readAsText(file);
+    }
+
+    // ==========================================
+    // 2. 基础排版功能 & 序号清理
+    // ==========================================
+    function clearOriginalNumbers() {
+        editor.querySelectorAll('.ai-step-num').forEach(el => el.remove());
+        const paragraphs = editor.querySelectorAll('p');
+        const regex = /^[\(（【\[]?([0-9]{1,3}|[a-zA-Z]|[一二三四五六七八九十]{1,3})[\.\,、\)）\]】]\s*|^第[0-9一二三四五六七八九十]+步[：:]?\s*/;
+        
+        paragraphs.forEach(p => {
+            for (let i = 0; i < p.childNodes.length; i++) {
+                let node = p.childNodes[i];
+                if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim() !== '') {
+                    if (regex.test(node.nodeValue.trimStart())) {
+                        node.nodeValue = node.nodeValue.trimStart().replace(regex, '');
+                    }
+                    break; 
+                } else if (node.nodeType === Node.ELEMENT_NODE && node.innerText.trim() !== '') {
+                    if (regex.test(node.innerText.trimStart())) {
+                        node.innerText = node.innerText.trimStart().replace(regex, '');
+                    }
+                    break;
+                }
+            }
+        });
+        applyFormatting(); 
+        saveToLocal();
+    }
+
+    function applyFormatting() {
+        if (editor.innerText.trim() === '' && !editor.querySelector('img')) return;
+
+        const fSize = document.getElementById('fontSizeSelect').value;
+        const fColor = document.getElementById('fontColorSelect').value;
+        const isBoldNum = document.getElementById('boldNumberCheck').checked;
+        const numFormatStr = document.getElementById('numFormat').value || '{n}、';
+        const imgAlign = document.getElementById('imgAlignSelect').value;
+        const imgRadius = document.getElementById('imgBorderRadius').value;
+        const imgWidth = document.getElementById('imgBorderWidth').value;
+        const imgColor = document.getElementById('imgBorderColor').value;
+
+        const paragraphs = editor.querySelectorAll('p');
+        let stepCount = 1;
+
+        paragraphs.forEach(p => {
+            if (p.closest('table') || p.closest('.mp_profile_iframe_wrp')) return;
+            const text = p.innerText.trim();
+            const img = p.querySelector('img');
+
+            if (text === '' && !img) { p.remove(); return; }
+
+            if (text !== '' && !img) {
+                p.style.fontSize = fSize; p.style.color = fColor;
+                p.querySelectorAll('span').forEach(span => { span.style.fontSize = fSize; span.style.color = fColor; });
+
+                const oldNum = p.querySelector('.ai-step-num');
+                if (oldNum) oldNum.remove();
+
+                const numSpan = document.createElement('span');
+                numSpan.className = 'ai-step-num';
+                if (isBoldNum) numSpan.style.fontWeight = 'bold';
+                numSpan.style.color = fColor;
+                numSpan.innerText = numFormatStr.replace(/\{n\}/g, stepCount);
+
+                const targetElement = p.querySelector('span') || p;
+                targetElement.insertBefore(numSpan, targetElement.firstChild);
+                stepCount++;
+            }
+            
+            if (img) {
+                p.style.margin = "0"; p.style.padding = "0";
+                p.style.textAlign = imgAlign;
+                img.style.borderRadius = `${imgRadius}px`;
+                if (imgWidth > 0) {
+                    img.style.borderWidth = `${imgWidth}px`;
+                    img.style.borderStyle = "solid";
+                    img.style.borderColor = imgColor;
+                } else { img.style.border = "none"; }
+                img.style.boxSizing = "border-box";
+            }
+        });
+    }
+
+    // ==========================================
+    // 3. 水印引擎
+    // ==========================================
+    function getWatermarkParams() {
+        return {
+            text: document.getElementById('wmText').value,
+            rotation: parseInt(document.getElementById('wmRotation').value) || 0,
+            opacity: parseInt(document.getElementById('wmOpacity').value) / 100,
+            sizePercent: parseInt(document.getElementById('wmSizePercent').value) || 30
+        };
+    }
+
+    function drawWatermarkOnCanvas(ctx, canvasWidth, canvasHeight, params) {
+        if (!params.text) return;
+        const baseSize = Math.min(canvasWidth, canvasHeight);
+        const fontSize = baseSize * (params.sizePercent / 100);
+        
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.fillStyle = `rgba(150, 150, 150, ${params.opacity})`; 
+        ctx.textBaseline = "middle"; 
+
+        ctx.save();
+        ctx.translate(canvasWidth / 2, canvasHeight / 2);
+        ctx.rotate((params.rotation * Math.PI) / 180);
+
+        const lines = params.text.split('\n');
+        const lineHeight = fontSize * 1.3; 
+        const totalHeight = lines.length * lineHeight;
+        const startY = -(totalHeight / 2) + (lineHeight / 2);
+
+        ctx.textAlign = "left";
+        let maxWidth = 0;
+        lines.forEach(line => {
+            const metrics = ctx.measureText(line);
+            if (metrics.width > maxWidth) { maxWidth = metrics.width; }
+        });
+        const startX = -maxWidth / 2;
+
+        lines.forEach((line, index) => {
+            ctx.fillText(line, startX, startY + (index * lineHeight));
+        });
+        ctx.restore();
+    }
+
+    function updatePreview() {
+        const params = getWatermarkParams();
+        document.getElementById('wmOpacityVal').innerText = `${Math.round(params.opacity * 100)}%`;
+
+        const canvas = document.getElementById('wmPreviewCanvas');
+        const ctx = canvas.getContext('2d');
+        const cw = canvas.width;
+        const ch = canvas.height;
+
+        ctx.clearRect(0, 0, cw, ch);
+        ctx.fillStyle = "#e9ecef"; 
+        ctx.fillRect(0, 0, cw, ch);
+        ctx.fillStyle = "#ced4da";
+        ctx.beginPath(); ctx.moveTo(20, ch); ctx.lineTo(80, 40); ctx.lineTo(130, 90); ctx.lineTo(200, 20); ctx.lineTo(cw, ch); ctx.fill();
+
+        drawWatermarkOnCanvas(ctx, cw, ch, params);
+    }
+
+    async function applyWatermarkToAllImages() {
+        const params = getWatermarkParams();
+        if (!params.text) { alert("💧 请输入水印文字。"); return; }
+        
+        const images = editor.querySelectorAll('img');
+        const total = images.length;
+        if (total === 0) { alert("编辑区内没有发现图片。"); return; }
+
+        toggleButtonsState(true);
+        let count = 0;
+
+        for (const img of images) {
+            try {
+                await processSingleImage(img, params);
+                count++;
+            } catch (error) { console.error("图片处理失败:", error); }
+        }
+        alert(`✅ 水印处理完成。已处理 ${count}/${total} 张图片。`);
+        toggleButtonsState(false);
+    }
+
+    function processSingleImage(img, params) {
+        return new Promise((resolve, reject) => {
+            const originalSrc = img.src;
+            const tempImg = new Image();
+            tempImg.crossOrigin = "Anonymous"; 
+
+            tempImg.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                // 1. 严格使用图片的原始物理像素尺寸，不放大也不缩小
+                // 使用 naturalWidth 确保拿到的是图片真实分辨率，而不是 CSS 显示尺寸
+                canvas.width = tempImg.naturalWidth;
+                canvas.height = tempImg.naturalHeight;
+
+                // 2. 闭屏抗锯齿平滑。因为我们是 1:1 像素对齐绘制原图，
+                // 开启平滑反而可能让软件截图的文字边缘变虚，关闭它能保持“像素级锐利”
+                ctx.imageSmoothingEnabled = false;
+
+                // 3. 1:1 绘制原图
+                ctx.drawImage(tempImg, 0, 0);
+                
+                // 4. 绘制水印
+                drawWatermarkOnCanvas(ctx, canvas.width, canvas.height, params);
+
+                // 5. 强制输出为无损的 PNG 格式。
+                // 这样能保证除了有水印覆盖的地方，其余像素 100% 还原。
+                img.src = canvas.toDataURL('image/png');
+                
+                resolve();
+            };
+
+            tempImg.onerror = function() {
+                if (originalSrc.startsWith('http') && !originalSrc.includes('base64')) {
+                    alert(`⚠️ 跨域限制，无法处理网络图片，请先截图再粘贴。`);
+                }
+                reject(new Error(`加载图片出错`));
+            };
+            tempImg.src = originalSrc;
+        });
+    }
+
+    function toggleButtonsState(isDisabled) {
+        document.querySelectorAll('button').forEach(btn => btn.disabled = isDisabled);
+    }
+
+    // ==========================================
+    // 4. 事件绑定与初始化（脚本末尾直接执行保证生效）
+    // ==========================================
+    initCustomSelects(); 
+    
+    document.querySelectorAll('.auto-trigger').forEach(el => { 
+        el.addEventListener('input', () => { applyFormatting(); saveToLocal(); }); 
+        el.addEventListener('change', () => { applyFormatting(); saveToLocal(); }); 
+    });
+    
+    document.querySelectorAll('.wm-trigger').forEach(el => { 
+        el.addEventListener('input', () => { updatePreview(); saveToLocal(); }); 
+        el.addEventListener('change', () => { updatePreview(); saveToLocal(); }); 
+    });
+
+    editor.addEventListener('paste', () => { setTimeout(applyFormatting, 100); });
+
+    // 读取缓存并同步UI
+    loadFromLocal();
+    updatePreview();
+
+    function doCopy() {
+        applyFormatting(); 
+        const range = document.createRange(); range.selectNodeContents(editor);
+        const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+        
+        try {
+            document.execCommand('copy');
+            selection.removeAllRanges(); 
+            const btn = document.getElementById('copyBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '✅ 已复制';
+            btn.style.backgroundColor = '#06ad56';
+            setTimeout(() => { btn.innerHTML = originalText; btn.style.backgroundColor = ''; }, 2000);
+        } catch (err) { alert('复制失败，请按 Ctrl+C。'); }
+    }
+
+    function clearEditor() {
+        if(confirm("确定清空画板吗？")) { editor.innerHTML = ''; }
+    }
+</script>
+
+</body>
+</html>
